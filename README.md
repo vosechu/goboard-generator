@@ -2,6 +2,12 @@
 
 I've used the boards and these generators from https://micans.org/goboards for years, but my paper copies have gotten too stained to bear, so I needed to generate new ones. Unfortunately, 5x5 and 7x7 weren't supported out of the box, so I needed to make a couple changes. Additionally, I wanted to add some docs and instructions for converting to pdf on a mac.
 
+<p align="center">
+  <img src="examples/test-kaya-a4-9x9.png" alt="Kaya Example" width="225"/>
+  <img src="examples/test-katsura-a2-19x19.png" alt="Katsura Example" width="225"/>
+  <img src="examples/test-colorbg-a4-7x7.png" alt="Colored Background Example" width="225"/>
+</p>
+
 ## Generating Go Boards
 
 ### Small Boards (A4 paper)
