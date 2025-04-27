@@ -1,6 +1,8 @@
-# Copy of the source from micans.org goboard generator
+# Printable Go board (Goban) generator
 
-I've used the boards and these generators from https://micans.org/goboards for years, but my paper copies have gotten too stained to bear, so I needed to generate new ones. Unfortunately, 5x5 and 7x7 weren't supported out of the box, so I needed to make a couple changes. Additionally, I wanted to add some docs and instructions for converting to pdf on a mac.
+I've used the boards from https://micans.org/goboards for years, I wanted to try playing capture go on 5x5 and 7x7 sized boards. These weren't listed on the site, but I knew the generator was generic, so I gave it a whirl. It didn't work on my mac and there was no way to download all the source at once, so I decided to pop this on Github.com and make my changes there.
+
+This is licensed under GPLv2
 
 <p align="center">
   <img src="examples/test-kaya-a4-9x9.png" alt="Kaya Example" width="225"/>
