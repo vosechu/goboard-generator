@@ -10,6 +10,7 @@
 #  -  Hans Georg Michna: suggestion to offer wood grain background.
 #  -  Paul Bourke: Simulated wood grain images from Paul's website at
 #          http://local.wasp.uwa.edu.au/~pbourke/texture_colour/
+#  -  Chuck Lauer Vose: Revamp for MacOS usage
 #
 #  You can redistribute and/or modify this file under the terms of the GNU
 #  General Public License; either version 2 of the License or (at your option)
@@ -41,61 +42,98 @@ my %defines =  ();
 sub help {
    print <<EOH;
 Usage:
-   $progname --size=<9|13> [options]
-Options:
---size=<num>            go board size, one of 9 or 13
---papersize=<A3|A4>     A3 or A4 (A4 only with --size=9)
---hh="list"             handicap points, e.g. "4 7 10" (all pairs are printed)
---hhh="list"            handicap points, e.g. "[5 5] [7 7]"
---set=key="val"         set parameter (see --list-params)
---list-params           list available parameter keys and default settings
---list-fonts            list fonts commonly available
---list-colors           list color names available for color parameters
---list-examples         list examples of usage
---grain=<fname>         grain file name (pnmtops derived PS code)
---debug=<num>           debug level
+   $progname --size=<5|7|9|13|19> [options]
 
-Example:
+Options (all can be combined as needed):
 
-gb-TEMPLATE --grain=nzt.ps --size=9 --set=clipsize=14 --set=bgsize=14 \
-   --set=txtlft="Cambridge University Go Club" \
-   --set=txtrgt="http://www.cam.ac.uk/societies/cugos/" \
-   --papersize=A3 --hh="3 7" --set=txtanch="" \
-   > my-goboard.ps
+--size=<num>            Go board size. Supported: 5, 7, 9, 13, 19.
+                        (Smaller sizes are useful for teaching or quick games.)
+--papersize=<A4|A3|A2>  Paper size. A4 for small boards, A3/A2 for larger boards.
+                        (A4 only with --size=5,7,9; A3 for 13; A2 for 19.)
+--hh="list"             Handicap points (symmetric), e.g. "4 7 10".
+                        All pairs are printed (e.g. 4,4; 4,7; 7,4; etc).
+--hhh="list"            Handicap points (explicit), e.g. "[5 5] [7 7]".
+                        Use for non-symmetric or custom star points.
+--set=key="val"         Set a parameter (see --list-params for all keys).
+                        Examples: --set=txtlft="Left text" --set=graybg=0.8
+--list-params           List all available parameter keys and their defaults.
+--list-fonts            List fonts commonly available for text.
+--list-colors           List color names available for color parameters.
+--list-examples         List more usage examples.
+--grain=<fname>         Use a wood grain or image background (PostScript file).
+                        See below for how to create one from PNG/JPG.
+--debug=<num>           Set debug level (for troubleshooting).
 
-In this example a background file is imported with the --grain option.  This
-file should be made by converting an image file (e.g. jpg, png) with the pnm
-tools (e.g. jpegtopnm, pngtopnm), creating a suitable background by tiling the
-image or generally by applying any kind of image tranformation, and finally by
-using pnmtops.  In this example the result was stored in the file nzt.ps.
-gb-TEMPLATE will parse this file and extract the relevant portion. This is
-dependent on the way the pnm suite generates its PostScript output. Please
-report any unexpected errors to the address below.
 
-The background size is set to 14 with --set=bgsize=14. This affects the size
-and scale with which the image is imported -- it is mapped onto a grid of
-length and width 14 that shares its center with the center of the goboard.
+Quick Start Example:
+--------------------
+# Generate a standard 19x19 board on A2 paper with a kaya wood grain background:
+$progname --papersize=A2 --size=19 --hh="4 10 16" --grain=grains/kaya.ps > gb19a2.ps
 
-The --set=clipsize=14 option clips the image to the same grid. This has no
-effect in this case, as the background size does not exceed the clip size. By
-using --set=clipsize=10 one can clip the background one grid unit extending
-beyond the goboard.
+# Convert to PDF (requires Ghostscript):
+gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=gb19a2.pdf gb19a2.ps
 
-By default the program prints a small text refering to the origin and source of
-the goboard. This is turned of, as in the example, by setting --set=txtanch="".
 
-Parameters are set with --set=bgsize=14 (in this example parameter "bgsize").
-Parameters with name "name" will appear as "usr_name" (e.g. usr_bgsize) in the
-PostScript file. This applies to all parameters listed with --list-params.
+Backgrounds and Customization:
+-----------------------------
+# Use a built-in wood grain (see grains/ directory):
+$progname --papersize=A3 --size=13 --grain=grains/katsura.ps > gb13a3.ps
 
-color parameters are set with
-   --set=colortxt=Black
-or --set=colortxt="0.4 0.9 0.4"
-Use
-   --list-params to list all available parameters,
-   --list-colors to list available colors,
-   --list-fonts to list commonly available fonts,
-   --list-examples for more examples.
+# Use your own PNG/JPG as a grain background:
+pngtopnm mywood.png > mywood.pnm
+pnmtops mywood.pnm > grains/mywood.ps
+$progname --papersize=A3 --size=13 --grain=grains/mywood.ps > gb13a3-mywood.ps
+
+# Control background size and cropping:
+$progname --papersize=A3 --size=13 --grain=grains/mywood.ps --set=bgsize=14 --set=clipsize=13 > gb13a3-mywood.ps
+
+# Use a simple gray or colored background:
+$progname --papersize=A4 --size=9 --set=graybg=0.8 > gb9a4.ps
+$progname --papersize=A4 --size=9 --set=colorbg="0.9 0.8 0.7" > gb9a4.ps
+
+
+Custom Text, Fonts, and Colors:
+------------------------------
+# Add custom text to the left/right border:
+$progname --papersize=A4 --size=9 --set=txtlft="My Club" --set=txtrgt="2024" > gb9a4.ps
+
+# Change font and font size:
+$progname --papersize=A4 --size=9 --set=fontname=/Courier-Bold --set=fontsize=0.3 > gb9a4.ps
+
+# Change line and star point color:
+$progname --papersize=A4 --size=9 --set=colorlines="0.5 0.2 0.2" > gb9a4.ps
+
+# List available fonts and colors:
+$progname --list-fonts
+$progname --list-colors
+
+
+Crop Marks and Advanced Options:
+-------------------------------
+# Add crop marks to help with cutting:
+$progname --papersize=A4 --size=9 --set=cropdx=0.5 --set=cropdy=0.5 > gb9a4.ps
+
+# Remove the small print (origin/source):
+$progname --set=txtanch="" ...
+
+
+Parameter Details:
+------------------
+- Most visual and layout options are set with --set=key=value.
+- Use --list-params to see all keys and their defaults.
+- Color parameters accept color names (see --list-colors) or RGB triplets (e.g. "0.5 0.5 0.5").
+- Font parameters accept PostScript font names (see --list-fonts).
+- The --grain option requires a PostScript file, not a PNG/JPG. See above for conversion.
+
+
+Troubleshooting:
+----------------
+- If your grain background does not appear, ensure the .ps file is valid PostScript (see README for conversion steps).
+- For unexpected results, try --debug=1 for more output.
+
+
+For more examples, run:
+   $progname --list-examples
 
 Mail bug reports and suggestions to stijn a-t micans d-o-t org.
 EOH

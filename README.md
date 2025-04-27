@@ -37,20 +37,39 @@ To generate a 19x19 board on A2 paper:
 
 ### Using Wood Grain or Image Backgrounds
 
-You can add a wood grain or other image background to your board using the `--grain` option. The `/grains` folder contains several ready-to-use backgrounds from the original micans.org site:
+You can add a wood grain or other image background to your board using the `--grain` option. The `/grains` folder contains several ready-to-use backgrounds:
 
-- `ac.ps`: Likely "Acajou" (mahogany), a reddish wood.
-- `am.ps`: Possibly a stylized oak or another decorative wood (dark yellow, non-growth lines).
-- `nzt.ps`: A light wood grain, possibly meant to evoke traditional Go board woods like Kaya, Spruce, or generic "New Zealand Timber".
+- `kaya.ps`: Traditional kaya wood grain, classic for Go boards.
+- `agathis.ps`: Agathis wood grain, a light and even texture.
+- `katsura.ps`: Katsura wood grain, another traditional Go board wood.
 
 **Example:**
 ```
-./gb-TEMPLATE --papersize=A3 --size=13 --grain=grains/nzt.ps > gb13a3.ps
+./gb-TEMPLATE --papersize=A3 --size=13 --grain=grains/kaya.ps > gb13a3.ps
 ```
 
-To use your own image, convert it to PostScript using Netpbm tools:
-1. Convert your image to PNM: `jpegtopnm mywood.jpg > mywood.pnm`
-2. Convert PNM to PostScript: `pnmtops mywood.pnm > mywood.ps`
+#### Using Your Own PNG/JPG as a Grain Background
+
+The `--grain` option requires a PostScript file, not a PNG or JPG. To use your own image:
+
+1. **Install Netpbm tools** (if not already installed):
+   ```sh
+   brew install netpbm
+   ```
+2. **Convert your image to PNM:**
+   ```sh
+   pngtopnm mywood.png > mywood.pnm
+   # or for JPG:
+   jpegtopnm mywood.jpg > mywood.pnm
+   ```
+3. **Convert PNM to PostScript:**
+   ```sh
+   pnmtops mywood.pnm > grains/mywood.ps
+   ```
+4. **Use the new grain:**
+   ```sh
+   ./gb-TEMPLATE --papersize=A3 --size=13 --grain=grains/mywood.ps > boards/gb13a3-mywood.ps
+   ```
 
 You can control the size and cropping of the background with:
 - `--set=bgsize=14` (background size in grid units)
@@ -58,7 +77,7 @@ You can control the size and cropping of the background with:
 
 **Example with size/crop:**
 ```
-./gb-TEMPLATE --papersize=A3 --size=13 --grain=grains/nzt.ps --set=bgsize=14 --set=clipsize=13 > gb13a3.ps
+./gb-TEMPLATE --papersize=A3 --size=13 --grain=grains/mywood.ps --set=bgsize=14 --set=clipsize=13 > boards/gb13a3-mywood.ps
 ```
 
 ### Simple Colored Backgrounds
