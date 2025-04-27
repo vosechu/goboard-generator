@@ -1,0 +1,1060 @@
+#!/usr/bin/perl -w
+
+# TODO
+#
+
+#  (C) Copyright 2007 Stijn van Dongen
+#  Contributors:
+#  -  Harry Fearnley: suggestions for features, additional documentation.
+#  -  Jan van der Steen: output device grid alignment.
+#  -  Hans Georg Michna: suggestion to offer wood grain background.
+#  -  Paul Bourke: Simulated wood grain images from Paul's website at
+#          http://local.wasp.uwa.edu.au/~pbourke/texture_colour/
+#
+#  You can redistribute and/or modify this file under the terms of the GNU
+#  General Public License; either version 2 of the License or (at your option)
+#  any later version.
+
+use Getopt::Long;
+use strict;
+
+my @ARGV_COPY  = @ARGV;
+my $n_args = @ARGV;
+
+$::debug =  0;
+$::test  =  0;
+my $help =  0;
+my $list_params   =  0;
+my $list_fonts    =  0;
+my $list_colors   =  0;
+my $list_examples =  0;
+
+my $gbsize =   13;
+my $hh     =   "";
+my $hhh    =   "";
+my $ppsize = 'A3';
+my $progname = 'gb-TEMPLATE';
+my $fngrain =  "";
+my %defines =  ();
+
+
+sub help {
+   print <<EOH;
+Usage:
+   $progname --size=<9|13> [options]
+Options:
+--size=<num>            go board size, one of 9 or 13
+--papersize=<A3|A4>     A3 or A4 (A4 only with --size=9)
+--hh="list"             handicap points, e.g. "4 7 10" (all pairs are printed)
+--hhh="list"            handicap points, e.g. "[5 5] [7 7]"
+--set=key="val"         set parameter (see --list-params)
+--list-params           list available parameter keys and default settings
+--list-fonts            list fonts commonly available
+--list-colors           list color names available for color parameters
+--list-examples         list examples of usage
+--grain=<fname>         grain file name (pnmtops derived PS code)
+--debug=<num>           debug level
+
+Example:
+
+gb-TEMPLATE --grain=nzt.ps --size=9 --set=clipsize=14 --set=bgsize=14 \
+   --set=txtlft="Cambridge University Go Club" \
+   --set=txtrgt="http://www.cam.ac.uk/societies/cugos/" \
+   --papersize=A3 --hh="3 7" --set=txtanch="" \
+   > my-goboard.ps
+
+In this example a background file is imported with the --grain option.  This
+file should be made by converting an image file (e.g. jpg, png) with the pnm
+tools (e.g. jpegtopnm, pngtopnm), creating a suitable background by tiling the
+image or generally by applying any kind of image tranformation, and finally by
+using pnmtops.  In this example the result was stored in the file nzt.ps.
+gb-TEMPLATE will parse this file and extract the relevant portion. This is
+dependent on the way the pnm suite generates its PostScript output. Please
+report any unexpected errors to the address below.
+
+The background size is set to 14 with --set=bgsize=14. This affects the size
+and scale with which the image is imported -- it is mapped onto a grid of
+length and width 14 that shares its center with the center of the goboard.
+
+The --set=clipsize=14 option clips the image to the same grid. This has no
+effect in this case, as the background size does not exceed the clip size. By
+using --set=clipsize=10 one can clip the background one grid unit extending
+beyond the goboard.
+
+By default the program prints a small text refering to the origin and source of
+the goboard. This is turned of, as in the example, by setting --set=txtanch="".
+
+Parameters are set with --set=bgsize=14 (in this example parameter "bgsize").
+Parameters with name "name" will appear as "usr_name" (e.g. usr_bgsize) in the
+PostScript file. This applies to all parameters listed with --list-params.
+
+color parameters are set with
+   --set=colortxt=Black
+or --set=colortxt="0.4 0.9 0.4"
+Use
+   --list-params to list all available parameters,
+   --list-colors to list available colors,
+   --list-fonts to list commonly available fonts,
+   --list-examples for more examples.
+
+Mail bug reports and suggestions to stijn a-t micans d-o-t org.
+EOH
+}
+
+
+my %COLORS =
+(  AliceBlue                                =>  '[0.94 0.97 1.00]'
+,  AntiqueWhite                             =>  '[0.98 0.92 0.84]'
+,  Aqua                                     =>  '[0.00 1.00 1.00]'
+,  Aquamarine                               =>  '[0.50 1.00 0.83]'
+,  Azure                                    =>  '[0.94 1.00 1.00]'
+,  Beige                                    =>  '[0.96 0.96 0.86]'
+,  Bisque                                   =>  '[1.00 0.89 0.77]'
+,  Black                                    =>  '[0.00 0.00 0.00]'
+,  BlanchedAlmond                           =>  '[1.00 0.92 0.80]'
+,  Blue                                     =>  '[0.00 0.00 1.00]'
+,  BlueViolet                               =>  '[0.54 0.17 0.88]'
+,  Brown                                    =>  '[0.64 0.16 0.16]'
+,  BurlyWood                                =>  '[0.87 0.72 0.53]'
+,  CadetBlue                                =>  '[0.37 0.62 0.62]'
+,  Chartreuse                               =>  '[0.50 1.00 0.00]'
+,  Chocolate                                =>  '[0.82 0.41 0.12]'
+,  Coral                                    =>  '[1.00 0.50 0.31]'
+,  CornflowerBlue                           =>  '[0.39 0.58 0.93]'
+,  Cornsilk                                 =>  '[1.00 0.97 0.86]'
+,  Crimson                                  =>  '[0.86 0.08 0.23]'
+,  Cyan                                     =>  '[0.00 1.00 1.00]'
+,  DarkBlue                                 =>  '[0.00 0.00 0.54]'
+,  DarkCyan                                 =>  '[0.00 0.54 0.54]'
+,  DarkGoldenRod                            =>  '[0.72 0.52 0.04]'
+,  DarkGray                                 =>  '[0.66 0.66 0.66]'
+,  DarkGreen                                =>  '[0.00 0.39 0.00]'
+,  DarkKhaki                                =>  '[0.74 0.71 0.42]'
+,  DarkMagenta                              =>  '[0.54 0.00 0.54]'
+,  DarkOliveGreen                           =>  '[0.33 0.42 0.18]'
+,  Darkorange                               =>  '[1.00 0.55 0.00]'
+,  DarkOrchid                               =>  '[0.60 0.20 0.80]'
+,  DarkRed                                  =>  '[0.54 0.00 0.00]'
+,  DarkSalmon                               =>  '[0.91 0.59 0.48]'
+,  DarkSeaGreen                             =>  '[0.56 0.73 0.56]'
+,  DarkSlateBlue                            =>  '[0.28 0.24 0.54]'
+,  DarkSlateGray                            =>  '[0.18 0.31 0.31]'
+,  DarkTurquoise                            =>  '[0.00 0.80 0.82]'
+,  DarkViolet                               =>  '[0.58 0.00 0.82]'
+,  DeepPink                                 =>  '[1.00 0.08 0.57]'
+,  DeepSkyBlue                              =>  '[0.00 0.75 1.00]'
+,  DimGray                                  =>  '[0.41 0.41 0.41]'
+,  DodgerBlue                               =>  '[0.12 0.56 1.00]'
+,  Feldspar                                 =>  '[0.82 0.57 0.46]'
+,  FireBrick                                =>  '[0.70 0.13 0.13]'
+,  FloralWhite                              =>  '[1.00 0.98 0.94]'
+,  ForestGreen                              =>  '[0.13 0.54 0.13]'
+,  Fuchsia                                  =>  '[1.00 0.00 1.00]'
+,  Gainsboro                                =>  '[0.86 0.86 0.86]'
+,  GhostWhite                               =>  '[0.97 0.97 1.00]'
+,  Gold                                     =>  '[1.00 0.84 0.00]'
+,  GoldenRod                                =>  '[0.85 0.64 0.12]'
+,  Gray                                     =>  '[0.50 0.50 0.50]'
+,  Green                                    =>  '[0.00 0.50 0.00]'
+,  GreenYellow                              =>  '[0.68 1.00 0.18]'
+,  HoneyDew                                 =>  '[0.94 1.00 0.94]'
+,  HotPink                                  =>  '[1.00 0.41 0.70]'
+,  IndianRed                                =>  '[0.80 0.36 0.36]'
+,  Indigo                                   =>  '[0.29 0.00 0.51]'
+,  Ivory                                    =>  '[1.00 1.00 0.94]'
+,  Khaki                                    =>  '[0.94 0.90 0.55]'
+,  Lavender                                 =>  '[0.90 0.90 0.98]'
+,  LavenderBlush                            =>  '[1.00 0.94 0.96]'
+,  LawnGreen                                =>  '[0.48 0.98 0.00]'
+,  LemonChiffon                             =>  '[1.00 0.98 0.80]'
+,  LightBlue                                =>  '[0.68 0.84 0.90]'
+,  LightCoral                               =>  '[0.94 0.50 0.50]'
+,  LightCyan                                =>  '[0.88 1.00 1.00]'
+,  LightGoldenRodYellow                     =>  '[0.98 0.98 0.82]'
+,  LightGrey                                =>  '[0.82 0.82 0.82]'
+,  LightGreen                               =>  '[0.56 0.93 0.56]'
+,  LightPink                                =>  '[1.00 0.71 0.75]'
+,  LightSalmon                              =>  '[1.00 0.62 0.48]'
+,  LightSeaGreen                            =>  '[0.12 0.70 0.66]'
+,  LightSkyBlue                             =>  '[0.53 0.80 0.98]'
+,  LightSlateBlue                           =>  '[0.52 0.44 1.00]'
+,  LightSlateGray                           =>  '[0.46 0.53 0.60]'
+,  LightSteelBlue                           =>  '[0.69 0.77 0.87]'
+,  LightYellow                              =>  '[1.00 1.00 0.88]'
+,  Lime                                     =>  '[0.00 1.00 0.00]'
+,  LimeGreen                                =>  '[0.20 0.80 0.20]'
+,  Linen                                    =>  '[0.98 0.94 0.90]'
+,  Magenta                                  =>  '[1.00 0.00 1.00]'
+,  Maroon                                   =>  '[0.50 0.00 0.00]'
+,  MediumAquaMarine                         =>  '[0.40 0.80 0.66]'
+,  MediumBlue                               =>  '[0.00 0.00 0.80]'
+,  MediumOrchid                             =>  '[0.73 0.33 0.82]'
+,  MediumPurple                             =>  '[0.57 0.44 0.84]'
+,  MediumSeaGreen                           =>  '[0.23 0.70 0.44]'
+,  MediumSlateBlue                          =>  '[0.48 0.41 0.93]'
+,  MediumSpringGreen                        =>  '[0.00 0.98 0.60]'
+,  MediumTurquoise                          =>  '[0.28 0.82 0.80]'
+,  MediumVioletRed                          =>  '[0.78 0.08 0.52]'
+,  MidnightBlue                             =>  '[0.10 0.10 0.44]'
+,  MintCream                                =>  '[0.96 1.00 0.98]'
+,  MistyRose                                =>  '[1.00 0.89 0.88]'
+,  Moccasin                                 =>  '[1.00 0.89 0.71]'
+,  NavajoWhite                              =>  '[1.00 0.87 0.68]'
+,  Navy                                     =>  '[0.00 0.00 0.50]'
+,  OldLace                                  =>  '[0.99 0.96 0.90]'
+,  Olive                                    =>  '[0.50 0.50 0.00]'
+,  OliveDrab                                =>  '[0.42 0.55 0.14]'
+,  Orange                                   =>  '[1.00 0.64 0.00]'
+,  OrangeRed                                =>  '[1.00 0.27 0.00]'
+,  Orchid                                   =>  '[0.85 0.44 0.84]'
+,  PaleGoldenRod                            =>  '[0.93 0.91 0.66]'
+,  PaleGreen                                =>  '[0.59 0.98 0.59]'
+,  PaleTurquoise                            =>  '[0.68 0.93 0.93]'
+,  PaleVioletRed                            =>  '[0.84 0.44 0.57]'
+,  PapayaWhip                               =>  '[1.00 0.93 0.83]'
+,  PeachPuff                                =>  '[1.00 0.85 0.72]'
+,  Peru                                     =>  '[0.80 0.52 0.25]'
+,  Pink                                     =>  '[1.00 0.75 0.79]'
+,  Plum                                     =>  '[0.86 0.62 0.86]'
+,  PowderBlue                               =>  '[0.69 0.88 0.90]'
+,  Purple                                   =>  '[0.50 0.00 0.50]'
+,  Red                                      =>  '[1.00 0.00 0.00]'
+,  RosyBrown                                =>  '[0.73 0.56 0.56]'
+,  RoyalBlue                                =>  '[0.25 0.41 0.88]'
+,  SaddleBrown                              =>  '[0.54 0.27 0.07]'
+,  Salmon                                   =>  '[0.98 0.50 0.45]'
+,  SandyBrown                               =>  '[0.95 0.64 0.38]'
+,  SeaGreen                                 =>  '[0.18 0.54 0.34]'
+,  SeaShell                                 =>  '[1.00 0.96 0.93]'
+,  Sienna                                   =>  '[0.62 0.32 0.18]'
+,  Silver                                   =>  '[0.75 0.75 0.75]'
+,  SkyBlue                                  =>  '[0.53 0.80 0.92]'
+,  SlateBlue                                =>  '[0.41 0.35 0.80]'
+,  SlateGray                                =>  '[0.44 0.50 0.56]'
+,  Snow                                     =>  '[1.00 0.98 0.98]'
+,  SpringGreen                              =>  '[0.00 1.00 0.50]'
+,  SteelBlue                                =>  '[0.27 0.51 0.70]'
+,  Tan                                      =>  '[0.82 0.70 0.55]'
+,  Teal                                     =>  '[0.00 0.50 0.50]'
+,  Thistle                                  =>  '[0.84 0.75 0.84]'
+,  Tomato                                   =>  '[1.00 0.39 0.28]'
+,  Turquoise                                =>  '[0.25 0.88 0.81]'
+,  Violet                                   =>  '[0.93 0.51 0.93]'
+,  VioletRed                                =>  '[0.81 0.12 0.56]'
+,  Wheat                                    =>  '[0.96 0.87 0.70]'
+,  White                                    =>  '[1.00 1.00 1.00]'
+,  WhiteSmoke                               =>  '[0.96 0.96 0.96]'
+,  Yellow                                   =>  '[1.00 1.00 0.00]'
+,  DarkYellow                               =>  '[1.00 0.90 0.00]'
+,  YellowGreen                              =>  '[0.60 0.80 0.20]'
+)  ;
+
+
+if
+(! GetOptions
+   (  "help"            =>   \$help
+   ,  "test"            =>   \$::test
+   ,  "debug=i"         =>   \$::debug
+   ,  "size=i"          =>   \$gbsize
+   ,  "list-params"     =>   \$list_params
+   ,  "list-fonts"      =>   \$list_fonts
+   ,  "list-colors"     =>   \$list_colors
+   ,  "list-examples"   =>   \$list_examples
+   ,  "grain=s"         =>   \$fngrain
+   ,  "papersize=s"     =>   \$ppsize
+   ,  "set=s"           =>   \%defines
+   ,  "hh=s"            =>   \$hh
+   ,  "hhh=s"           =>   \$hhh
+   )
+)
+   {  print STDERR "option processing failed\n";
+      exit(1);
+   }
+
+if (!$n_args || $help) {
+   help();
+   exit 0;
+}
+
+
+if ($gbsize == 13) {
+   $ppsize = 'A3';
+}
+
+local $/ = undef;
+
+my $ps = <DATA>;
+
+if ($list_params) {
+   printf "%15s %15s     %s\n", "KEY", "DEFAULT", "REMARKS";
+   print '-' x 70, "\n";
+   while ($ps =~ /^\/usr_(\S+)\s+(.*?)\s+def(.*)/mg) {
+      my ($key, $default, $trailer) = ($1, $2, $3);
+      if ($key =~ /^txt/) {
+         $default =~ s/^\(/"/;
+         $default =~ s/\)$/"/;
+      }
+      if ($trailer =~ /## (.*?) ##/) {
+         printf "%15s %15s     %s\n",  $key, $default, $1;
+      }
+      else {
+         printf "%20s %20s\n",  $key, $default;
+      }
+   }
+   exit 0;
+}
+
+
+if ($list_colors) {
+   for my $k (sort keys %COLORS) {
+      printf "%-20s %s\n", $k, $COLORS{$k};
+   }
+   exit(0);
+}
+
+
+if ($list_examples) {
+   print <<EOE;
+
+gb-TEMPLATE --papersize=A4 --size=9 --set=txtlft="GO" --set=txtrgt="life on a grid"
+
+gb-TEMPLATE --set=txtlft="GO" --set=txtrgt="life on a grid" --set=fontname=/Courier-Bold
+   # --papersize and --size and other options can be mixed with these.
+
+gb-TEMPLATE --list-fonts
+   # list commonly availabe fonts.
+
+gb-TEMPLATE --papersize=A3 --size=9 --set=bgsize=14 --grain=nzt.ps
+   # this requires the presence of a suitable file 'nzt.ps',
+   # refer to --help and http://micans.org/goboards for more information.
+
+gb-TEMPLATE --papersize=A3 --size=9 --set=bgsize=10 --grain=nzt.ps
+   # smaller background
+
+gb-TEMPLATE --papersize=A3 --size=9 --set=clipsize=10 --set=bgsize=14 --grain=nzt.ps
+   # smaller background by clipping a larger background
+
+gb-TEMPLATE --papersize=A4 --size=9 --set=bgsize=10 --set=graybg=0.8
+   # use a gray background
+
+EOE
+exit(0);
+}
+
+if ($list_fonts) {
+print <<EOL;
+  Bookman-Demi                     Courier
+  Bookman-DemiItalic               Courier-Oblique
+  Bookman-Light                    Courier-Bold
+  Bookman-LightItalic              Courier-BoldOblique
+
+  AvantGarde-Book                  Helvetica
+  AvantGarde-BookOblique           Helvetica-Oblique
+  AvantGarde-Demi                  Helvetica-Bold
+  AvantGarde-DemiOblique           Helvetica-BoldOblique
+
+  Helvetica-Narrow                 Palatino-Roman
+  Helvetica-Narrow-Oblique         Palatino-Italic
+  Helvetica-Narrow-Bold            Palatino-Bold
+  Helvetica-Narrow-BoldOblique     Palatino-BoldItalic
+
+  NewCenturySchlbk-Roman           Times-Roman
+  NewCenturySchlbk-Italic          Times-Italic
+  NewCenturySchlbk-Bold            Times-Bold
+  NewCenturySchlbk-BoldItalic      Times-BoldItalic
+EOL
+   exit 0;
+}
+
+die "unrecognized paper size" unless $ppsize =~ /^A[1234]$/;
+
+my ($dm, $ft, $width, $height);
+
+if ($ppsize eq 'A4') {
+   $dm = '%%DocumentMedia: A4 595 842 0 () ()';
+   $ft = <<EOS;
+%%BeginFeature: *PageSize A4
+<< /PageSize [595 842] /ImagingBBox null >> setpagedevice
+%%EndFeature
+EOS
+   $width = 595;
+   $height = 842;
+}
+elsif ($ppsize eq 'A3') {
+   $dm = '%%DocumentMedia: A3 842 1190 0 () ()';
+   $ft = <<EOS;
+%%BeginFeature: *PageSize A3
+<< /PageSize [842 1190] /ImagingBBox null >> setpagedevice
+%%EndFeature
+EOS
+   $width = 842;
+   $height = 1190;
+}
+elsif ($ppsize eq 'A2') {
+   $dm = '%%DocumentMedia: A2 1190 1684 0 () ()';
+   $ft = <<EOS;
+%%BeginFeature: *PageSize A2
+<< /PageSize [1190 1684] /ImagingBBox null >> setpagedevice
+%%EndFeature
+EOS
+   $width = 1190;
+   $height = 1684;
+}
+elsif ($ppsize eq 'A1') {
+   $dm = '%%DocumentMedia: A1 1684 2384 0 () ()';
+   $ft = <<EOS;
+%%BeginFeature: *PageSize A1
+<< /PageSize [1684 2384] /ImagingBBox null >> setpagedevice
+%%EndFeature
+EOS
+   $width = 1684;
+   $height = 2384;
+}
+
+
+my $colors = join "", map { "/$_ $COLORS{$_} def\n" } keys %COLORS;
+
+$ps =~ s/##GBSIZE/$gbsize/;
+$ps =~ s/##DOCUMENTMEDIA/$dm/;
+$ps =~ s/##FEATUREPAGESIZE/$ft/;
+$ps =~ s/##HH1\b/$hh/;
+$ps =~ s/##HH2\b/$hhh/;
+$ps =~ s/##PAGEWIDTH/$width/;
+$ps =~ s/##PAGEHEIGHT/$height/;
+$ps =~ s/##COLORS/$colors/;
+$ps =~ s/##DEBUG/$::debug/;
+
+
+for my $key (keys %defines) {
+   my $val = $defines{$key};
+   if ($key =~ /^txt/) {
+      $val =~  s/\(/\\\(/g;
+      $val =~  s/\)/\\\)/g;
+   }
+   if
+   (  $key =~ /^color/
+   &&
+      (  ( $val =~ /^\s*\S+\s+\S+\s+\S+\s*$/
+         && $ps =~ s /^\/usr_$key\s+\w+\s+def
+                  /\/usr_$key \[ $val \] def
+                  /xm
+         )
+      || (  defined($COLORS{$val})
+         && $ps =~ s /^\/usr_$key\s+\w+\s+def
+                  /\/usr_$key $val def
+                  /xm
+         )
+      )
+   )
+   {  }
+   elsif
+   (  $key =~ /^txt/
+   && $ps =~ s/^\/usr_$key\s+\(\S*?\)\s+def
+              /\/usr_$key\ \($val\)\ def
+              /xm
+   )
+   {  }
+   elsif
+   (  ( $val !~ /\s+/ )
+   && $ps =~ s/^\/usr_$key\s+\S+\s+def/\/usr_$key $val def/m
+   )
+   {  }
+   else {
+      print STDERR "unsupported key/value: [$key]/[$val]\n";
+      print STDERR "issue --list-params for available keys\n";
+      if ($key =~ /^color/) {
+         print STDERR "color keys take \"<num> <num> <num>\" argument\n";
+      }
+   }
+}
+
+
+if ($fngrain) {
+   local $/ = undef;
+   open (GRAIN, "<$fngrain") || die "cannot open grain file $fngrain";
+   my $grain = <GRAIN>;
+   my $imcols = 0;
+
+   if ($grain =~ /currentfile.*readhexstring/m) {
+      if ($grain !~ /rpicstr\s+(\d+)\s+string\s+def/) {
+         print STDERR "I cannot parse the grain file, sorry";
+         exit(1);
+      }
+      $imcols = $1;
+   }
+
+   $grain =~ s/^.*?gsave//s;
+   $grain =~ s/grestore.*?$//s;
+   $grain =~ s/^(\S+) (\S+) translate//m;
+   $grain =~ s/^(\S+) (\S+) scale//m;
+
+   my ($ps1, $ps2) = split /##GRAIN/, $ps;
+   print $ps1;
+   print <<EOS;
+
+gsave    % wrap around translating, clipping, scaling.
+
+gbdimh gbdimh translate    % center of board now origin
+
+clipsizeh -1 mul
+clipsizeh -1 mul
+snap moveto
+0 usr_clipsize snap rlineto
+usr_clipsize 0 snap rlineto
+0 usr_clipsize -1 mul snap rlineto
+closepath
+clip
+
+bgsizeh -1 mul
+bgsizeh -1 mul snap translate
+usr_bgsize usr_bgsize scale
+
+EOS
+#####
+
+   if ($imcols) {
+      print <<EOS;
+/readstring {
+  currentfile exch readhexstring pop
+} bind def
+/rpicstr $imcols string def
+/gpicstr $imcols string def
+/bpicstr $imcols string def
+EOS
+#####
+   }
+
+   print $grain;
+#####
+
+   print <<EOS;
+grestore
+EOS
+#####
+   print $ps2;
+   exit;
+}
+
+
+
+print $ps;
+
+__DATA__
+%!PS-Adobe-3.0
+##DOCUMENTMEDIA
+%%EndComments
+
+%%BeginSetup
+##FEATUREPAGESIZE
+%%EndSetup
+
+%  (C) Copyright Stijn van Dongen
+%  Contributors:
+%  -  Harry Fearnley: suggestions for features, additional documentation.
+%  -  Jan van der Steen: output device grid alignment.
+%  -  Hans Georg Michna: suggestion to offer wood grain background.
+%  -  Paul Bourke: Simulated wood grain images from Paul's website at
+%          http://local.wasp.uwa.edu.au/~pbourke/texture_colour/
+%
+%  This is a PostScript program. You can redistribute and/or modify this file
+%  under the terms of the GNU General Public License; either version 2 of the
+%  License or (at your option) any later version.
+
+
+%%
+%%  This file contains several parameters you can customize
+%%  Including:
+%%    -  dimensions
+%%    -  positioned or centered layout
+%%    -  optional handicap (star) points
+%%    -  optional text (border of board)
+%%    -  optional crop marks
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Some colors names.
+%%%
+
+##COLORS
+/Ghost [2 2 2] def      % out of range colour, defaults to white.
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Main parameters
+%%%
+
+   % size of the goboard
+   %
+/gbsize ##GBSIZE def
+
+   % Implicit handicap point mechanism: all combinations are drawn.
+   % e.g. if hh1 is [3 7] then all points (3, 3), (3, 7), (7, 3), and (7, 7)
+   % are drawn.
+   % Use '/hh1 [] def' to get rid of them altogether.
+   %
+   % Additional handicap points can be defined in hh2, below.
+   % Common definitions are, for various board sizes:
+   %    9x9:   [3 7], perhaps with hh2 also set to [5 5]
+   %    13x13: [4 10]; [4 7 10]; [3 7 11]
+   %    19x19: [4 10 16]
+   %
+
+/hh1 [##HH1] def
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Optional crop marks
+%%%
+
+
+   %  "/usr_cropdx 0.5 def" means that the vertical crop line segments are set at
+   %  0.5 * xunit outside the board edges between the two players.  Similarly,
+   %  "/cropy 1.0 def" sets the horizontal crop line segments 1.0 * yunit beyond
+   %  the board edges facing the two players.
+   %
+   %  set these to 0.0 to avoid crop marks
+   %
+/usr_cropdx 0.0 def     % ## grid units, 0.0 implies no cropping ##
+/usr_cropdy 0.0 def     % ## grid units, 0.0 implies no cropping ##
+
+   % line width of the crop marks
+/usr_croplinewidth .005 def         % ## in grid units ##
+
+
+   %  Page dimensions in points.
+   %  This is needed by the program, and presumably you don't need or want
+   %  to change this unless you know what you are doing or feel adventurous.
+   %
+/pagewidth  ##PAGEWIDTH  def
+/pageheight ##PAGEHEIGHT def
+/debug      ##DEBUG      def
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     General parameters
+%%%
+
+   %
+   %  Parameters with names starting with "usr_" can be set with
+   %  the master script gb-TEMPLATE using the --set option, e.g.
+   %  /usr_xunit can be set using --set=xunit=<VALUE> .
+
+   %  N.B. The board is not square -- the long side is the direction between
+   %       the players.
+   %
+   % length in millimeters of the width of one grid unit
+/usr_xunit 22.0 def        % ## in millimeters ##
+   % length in millimeters of the height of one grid unit
+/usr_yunit 23.7 def        % ## in millimeters ##
+
+   % Web sources suggest that:
+   %    for Japanese stones (approx 22 mm diameter), the grid should be
+   %       22.33 mm X 23.92 mm, with a border that is half of each of these.
+   %    for Chinese stones (approx 23 mm diameter), the grid should be
+   %       23.33 mm X 24.22 mm
+   %
+   % page width offset in grid units of the lower left
+   % SET THIS TO 0 (zero) TO DO AUTOMATIC CENTERING (horizontally)
+   %
+/usr_xoffset 0 def         % ## in grid units (0 implies centering - width) ##
+   % page height offset in grid units of the lower left
+   % SET THIS TO 0 (zero) TO DO AUTOMATIC CENTERING (vertically)
+   %
+/usr_yoffset 0 def         % ## in grid units (0 implies centering - height) ##
+
+   % line width
+/usr_innerlinewidth .032 def        % ## in grid units ##
+   % line width of the perimeter
+/usr_outerlinewidth .064 def        % ## in grid units ##
+   % handicap points radius -- best is about 1.5 times usr_innerlinewidth
+/usr_hradius .05 def                % ## in grid units ##
+
+
+   % Explicit handicap point mechanism: add, or remove, at your pleasure.
+   % removing can be done by outcommenting, i.e. make the first non-white space
+   % character a literal '%' as for example in the line you now read.
+   %
+   % These are in *addition* to those defined in hh1, above.
+   %
+/hh2 [
+   ##HH2
+]
+def
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Font, font size
+%%%
+
+   % The font to write stuff with.
+   % Pick one of the names below.
+   % For fontsize just experiment with different values.
+   %
+   %     Bookman-Demi                 Courier
+   %     Bookman-DemiItalic           Courier-Oblique
+   %     Bookman-Light                Courier-Bold
+   %     Bookman-LightItalic          Courier-BoldOblique
+   %
+   %     AvantGarde-Book              Helvetica
+   %     AvantGarde-BookOblique       Helvetica-Oblique
+   %     AvantGarde-Demi              Helvetica-Bold
+   %     AvantGarde-DemiOblique       Helvetica-BoldOblique
+   %
+   %     Helvetica-Narrow             Palatino-Roman
+   %     Helvetica-Narrow-Oblique     Palatino-Italic
+   %     Helvetica-Narrow-Bold        Palatino-Bold
+   %     Helvetica-Narrow-BoldOblique Palatino-BoldItalic
+   %
+   %     NewCenturySchlbk-Roman       Times-Roman
+   %     NewCenturySchlbk-Italic      Times-Italic
+   %     NewCenturySchlbk-Bold        Times-Bold
+   %     NewCenturySchlbk-BoldItalic  Times-BoldItalic
+   %
+   % fontsize is related to the gridsize unit, hence the slightly unusual
+   % default setting of 0.2.
+   %
+/usr_fontsize 0.2 def                     % ## grid-unit related ##
+/usr_fontname /Helvetica def              % ## see --list-fonts ##
+usr_fontname findfont usr_fontsize scalefont setfont
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Optional text (left and right)
+%%%
+
+   % When viewed from either side of the board, usr_txtlft appears
+   % in the left of the bottom border of the board, usr_txtrgt appears in the
+   % right of the bottom border, and usr_txtmdl appears centered
+   % in the middle of the bottom border.
+   % To have different texts on the two sides use the usr_txtlft1, usr_txtlft2
+   % variants (similarly for mdl and rgt).
+   %
+/usr_txtlft  () def        % ## left aligned border text ##
+/usr_txtlft1 () def        % ## same, unique to one side ##
+/usr_txtlft2 () def        % ## same, unique to other side ##
+/usr_txtrgt  () def        % ## right aligned border text ##
+/usr_txtrgt1 () def        % ## same, unique to one side ##
+/usr_txtrgt2 () def        % ## same, unique to other side ##
+/usr_txtmdl  () def        % ## centered border text ##
+/usr_txtmdl1 () def        % ## same, unique to one side ##
+/usr_txtmdl2 () def        % ## same, unique to other side ##
+
+
+   % usr_txtdy governs how far the text is put away from the board.
+   %
+/usr_txtdy 0.6 def          % ## grid units ##
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Settings related to the small print
+%%%
+
+/usr_txtanch (http://micans.org/goboards/) def  % ## small print ##
+/usr_coloranch       Black def                  % ## small print color ##
+/usr_anchfontscale   0.72  def                  % ## relative to usr_fontsize ##
+/usr_anchdy          0.4   def                  % ## grid units ##
+
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Color settings (not all; e.g. usr_coloranch is defined elsewhere)
+%%%
+
+/usr_colorlines Black def     % ## colour for lines and star points ##
+/usr_colortxt Black def       % ## colour for all text ##
+/usr_graybg 2 def             % ## (default off) set in the range [0,1] ##
+/usr_colorbg Ghost def        % ## (default off) use color name or triplet ##
+
+
+
+   %%%%%%
+   %%%%%%
+   %%%%%%
+   %%%%%%   End of most parameters.
+
+   %%%%%%   usr_bgsize, usr_clipsize
+   %%%%%%      are defined further below.
+   %%%%%%
+   %%%%%%
+
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Scale, translate, set some helper measures.
+%%%
+
+/pttomm 2.845 def
+
+/gbdim gbsize -1 add def
+/gbdimh gbdim 2 div def
+
+usr_xunit pttomm mul
+usr_yunit pttomm mul
+scale
+
+/pagewidthii pagewidth pttomm div usr_xunit div def
+/pageheightii pageheight pttomm div usr_yunit div def
+
+usr_xoffset 0 eq {
+   /usr_xoffset pagewidthii gbdim -1 mul add 2 div def
+} if
+usr_yoffset 0 eq {
+   /usr_yoffset pageheightii gbdim -1 mul add 2 div def
+} if
+
+usr_xoffset usr_yoffset translate
+
+/str 50 string def
+debug 0 gt {
+   0 -0.8 moveto
+   % usr_xoffset gbdimh usr_xunit mul add str cvs show
+   usr_xoffset gbdimh add pttomm usr_xunit mul mul str cvs show
+
+   0 -1.1 moveto
+   % usr_yoffset gbdimh usr_yunit mul add str cvs show
+   usr_yoffset gbdimh add pttomm usr_yunit mul mul str cvs show
+} if
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Definitions
+%%%
+
+
+/h { usr_hradius 1 0 arc fill} def
+
+/snap { transform round exch round exch itransform } bind def
+
+
+/default_bgsize gbsize 1 add def
+/usr_bgsize default_bgsize def         % ## grid units (background image width and height) ##
+/bgsizeh usr_bgsize 2 div def
+
+/default_clipsize usr_bgsize def
+/usr_clipsize default_clipsize def     % ## grid units (visible part of background image) ##
+/clipsizeh usr_clipsize 2 div def
+
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Optional wood grain.
+%%%
+   %     This section should be created by gb-TEMPLATE
+   %     if it is empty, there is no easy way to fill it.
+% ##GRAIN
+
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Optional simple coloured background.
+%%%
+
+usr_graybg 2 lt
+usr_colorbg 2 get 2 lt or
+{ gsave
+gbdimh gbdimh translate    % center of board now origin
+
+   bgsizeh -1 mul
+   bgsizeh -1 mul
+   snap moveto
+   0 usr_bgsize snap rlineto
+   usr_bgsize 0 snap rlineto
+   0 usr_bgsize -1 mul snap rlineto
+   closepath
+
+   usr_graybg 2 lt
+   {  usr_graybg setgray
+   }  if
+   usr_colorbg 2 get 2 lt
+   {  usr_colorbg aload pop setrgbcolor
+   }  if
+
+   fill
+
+   grestore
+} if
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Do text
+%%%
+
+gsave
+usr_colortxt aload pop setrgbcolor
+
+%%%
+
+usr_txtrgt1 length 0 eq
+usr_txtrgt  length 0 gt and
+{ /usr_txtrgt1 usr_txtrgt def
+} if
+
+usr_txtrgt1 length 0 gt {
+   gsave
+   usr_txtrgt1 stringwidth pop -1 mul gbdim add usr_txtdy -1 mul moveto usr_txtrgt1 show
+   grestore
+} if
+
+usr_txtrgt2 length 0 eq
+usr_txtrgt1 length 0 gt and
+{ /usr_txtrgt2 usr_txtrgt1 def
+} if
+
+usr_txtrgt2 length 0 gt {
+   gsave
+   gbdim gbdim translate
+   -1 -1 scale
+   usr_txtrgt2 stringwidth pop -1 mul gbdim add usr_txtdy -1 mul moveto usr_txtrgt2 show
+   grestore
+} if
+
+%%%
+
+usr_txtlft1 length 0 eq
+usr_txtlft  length 0 gt and
+{ /usr_txtlft1 usr_txtlft def
+} if
+
+usr_txtlft1 length 0 gt {
+   gsave
+   0 usr_txtdy -1 mul moveto usr_txtlft1 show
+   grestore
+} if
+
+usr_txtlft2 length 0 eq
+usr_txtlft1 length 0 gt and
+{ /usr_txtlft2 usr_txtlft1 def
+} if
+
+usr_txtlft2 length 0 gt {
+   gsave
+   gbdim gbdim translate
+   -1 -1 scale
+   0 usr_txtdy -1 mul moveto usr_txtlft2 show
+   grestore
+} if
+
+%%%
+
+usr_txtmdl1 length 0 eq
+usr_txtmdl  length 0 gt and
+{ /usr_txtmdl1 usr_txtmdl def
+} if
+
+usr_txtmdl1 length 0 gt {
+   gsave
+   gbdim usr_txtmdl1 stringwidth pop -1 mul add 2 div
+   usr_txtdy -1 mul moveto
+   usr_txtmdl1 show
+   grestore
+} if
+
+usr_txtmdl2 length 0 eq
+usr_txtmdl1 length 0 gt and
+{ /usr_txtmdl2 usr_txtmdl1 def
+} if
+
+usr_txtmdl2 length 0 gt {
+   gsave
+   gbdim gbdim translate
+   -1 -1 scale
+   gbdim usr_txtmdl2 stringwidth pop -1 mul add 2 div
+   usr_txtdy -1 mul moveto
+   usr_txtmdl2 show
+   grestore
+} if
+
+gsave
+   -90 rotate
+   0 usr_anchdy -1 mul moveto
+   usr_coloranch aload pop setrgbcolor
+   usr_fontname findfont usr_fontsize usr_anchfontscale mul scalefont setfont
+   usr_txtanch stringwidth pop -1 mul 0 rmoveto
+   usr_txtanch show
+grestore
+gsave
+   gbdim gbdim translate
+   -1 -1 scale
+   -90 rotate
+   0 usr_anchdy -1 mul moveto
+   usr_coloranch aload pop setrgbcolor
+   usr_fontname findfont usr_fontsize 0.72 mul scalefont setfont
+   usr_txtanch stringwidth pop -1 mul 0 rmoveto
+   usr_txtanch show
+grestore
+
+grestore % usr_colortxt
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Print the board.
+%%%
+
+gsave
+   usr_colorlines aload pop setrgbcolor
+gsave
+   usr_innerlinewidth setlinewidth
+   1 1 gbdim -1 add {0 snap moveto 0 gbdim rlineto} for
+   1 1 gbdim -1 add {0 exch snap moveto gbdim 0 rlineto} for stroke
+   hh1 { -1 add dup dup hh1 { -1 add snap h } forall } forall
+   hh2 { aload pop -1 add exch -1 add exch snap h } forall
+   stroke
+grestore
+
+gsave
+   usr_outerlinewidth setlinewidth
+   0 0 snap moveto 0 gbdim snap lineto gbdim gbdim snap lineto gbdim 0 snap lineto closepath
+   stroke
+grestore
+grestore
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Print crop marks.
+%%%
+
+/cornercrop {
+   0 usr_cropdx -1.2 mul add 0 usr_cropdy -1.0 mul add snap moveto
+   1 0 rlineto stroke
+   0 usr_cropdx -1.0 mul add 0 usr_cropdy -1.2 mul add snap moveto
+   0 1 rlineto stroke
+} def
+
+usr_cropdx 0.0 gt {
+gsave
+   usr_croplinewidth setlinewidth
+                                     cornercrop
+   gsave gbdim gbdim translate -1 -1 scale cornercrop grestore
+   gsave gbdim     0 translate -1  1 scale cornercrop grestore
+   gsave 0     gbdim translate  1 -1 scale cornercrop grestore
+
+   gbdimh -0.5 add usr_cropdy -1 mul snap moveto 1 0 rlineto stroke
+   gbdimh -0.5 add gbdim usr_cropdy add snap moveto 1 0 rlineto stroke
+   gbdimh -0.5 add usr_cropdx -1 mul exch snap moveto 0 1 rlineto stroke
+   gbdimh -0.5 add gbdim usr_cropdx add exch snap moveto 0 1 rlineto stroke
+grestore
+} if
+
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%
+  %%     Retreat.
+%%%
+
+showpage
+
+%%EOF
